@@ -1,0 +1,12 @@
+[Unit]
+Description=Kazuha Stats Endpoint
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/kazuha-stats.py
+Restart=always
+RestartSec=5
+Environment=STATS_TOKEN=REPLACE_WITH_TOKEN
+
+[Install]
+WantedBy=multi-user.target

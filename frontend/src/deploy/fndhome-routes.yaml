@@ -1,0 +1,15 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hexmap-fndhome
+  namespace: homelab
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`hexmap.fndhome`)
+      kind: Rule
+      services:
+        - name: hexmap-main
+          port: 8080
