@@ -117,6 +117,31 @@ async function fetchK8sNodes() {
       console.warn('[k8s] metrics fetch failed:', e.message);
     }
 
+    // Node-level metrics for navia/chiori/shenhe — real OS usage, not Proxmox allocation
+    const k8sNodeMetrics = {};
+    const k8sNodeCapacity = {};
+    try {
+      const [usageData, capacityData] = await Promise.all([
+        k8s('/apis/metrics.k8s.io/v1beta1/nodes'),
+        k8s('/api/v1/nodes'),
+      ]);
+      for (const nm of (usageData.items || [])) {
+        k8sNodeMetrics[nm.metadata.name] = {
+          cpuM:   parseCpuM(nm.usage?.cpu),
+          memMiB: parseMemMiB(nm.usage?.memory),
+        };
+      }
+      for (const n of (capacityData.items || [])) {
+        k8sNodeCapacity[n.metadata.name] = {
+          cpuTotalM:   parseCpuM(n.status?.capacity?.cpu),
+          memTotalMiB: parseMemMiB(n.status?.capacity?.memory),
+        };
+      }
+      console.log(`[k8s] node-level metrics: ${Object.keys(k8sNodeMetrics).join(', ')}`);
+    } catch (e) {
+      console.warn('[k8s] node-level metrics failed:', e.message);
+    }
+
     const nodes = [...seen.values()].map(({ ns, nodeName, appName, ownerKind, podDown, pod }) => {
       const placement = K3S_NODE_PLACEMENT[nodeName] || K3S_NODE_PLACEMENT.navia;
       const metrics = appMetrics[`${ns}/${appName}`];
@@ -197,10 +222,10 @@ async function fetchK8sNodes() {
       console.warn('[k8s] NFS detection failed:', e.message);
     }
 
-    return { nodes, edges: nfsEdges, pods };
+    return { nodes, edges: nfsEdges, pods, nodeMetrics: k8sNodeMetrics, nodeCapacity: k8sNodeCapacity };
   } catch (err) {
     console.error('[k8s] failed:', err.message);
-    return { nodes: [], edges: [] };
+    return { nodes: [], edges: [], pods: [], nodeMetrics: {}, nodeCapacity: {} };
   }
 }
 

@@ -21,24 +21,29 @@ async function fetchHomeAssistantNode() {
   if (!HA_TOKEN) { console.warn('[ha] no HA_TOKEN'); return null; }
 
   try {
-    // Fetch system monitor entities in parallel
-    const [cpu, memUse, diskUse] = await Promise.all([
+    // Fetch system monitor entities in parallel — percent variants may not exist on all HA setups
+    const [cpu, memUse, memUsePct, diskUse, diskUsePct] = await Promise.all([
       haGet('/api/states/sensor.system_monitor_processor_use').catch(() => null),
       haGet('/api/states/sensor.system_monitor_memory_use').catch(() => null),
+      haGet('/api/states/sensor.system_monitor_memory_use_percent').catch(() => null),
       haGet('/api/states/sensor.system_monitor_disk_use').catch(() => null),
+      haGet('/api/states/sensor.system_monitor_disk_use_percent').catch(() => null),
     ]);
 
-    const cpuPercent = entityValue(cpu);
+    const cpuPercent  = entityValue(cpu);
+    const memUseMiB   = entityValue(memUse);
+    const memPercent  = entityValue(memUsePct);
+    const diskUseGiB  = entityValue(diskUse);
+    const diskPercent = entityValue(diskUsePct);
 
-    const memUseMiB = entityValue(memUse);
-    const diskUseGiB = entityValue(diskUse);
-
-    console.log(`[ha] noelle cpu=${cpuPercent}% mem=${memUseMiB}MiB disk=${diskUseGiB}GiB`);
+    console.log(`[ha] noelle cpu=${cpuPercent}% mem=${memUseMiB}MiB(${memPercent}%) disk=${diskUseGiB}GiB(${diskPercent}%)`);
 
     return {
       cpuPercent,
       memMiB: memUseMiB,
+      memPercent,
       diskGiB: diskUseGiB,
+      diskPercent,
       status: 'healthy',
     };
   } catch (err) {

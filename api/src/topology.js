@@ -35,7 +35,7 @@ async function buildTopology() {
         ...n,
         ip: leaseIp || n.ip,
         status: haStats.status,
-        meta: { ...n.meta, cpuPercent: haStats.cpuPercent, memMiB: haStats.memMiB, diskGiB: haStats.diskGiB, haMetrics: true },
+        meta: { ...n.meta, cpuPercent: haStats.cpuPercent, memMiB: haStats.memMiB, memPercent: haStats.memPercent, diskGiB: haStats.diskGiB, diskPercent: haStats.diskPercent, haMetrics: true },
       };
     }
     if (n.id === 'cyno' && opnStats) {
@@ -72,9 +72,30 @@ async function buildTopology() {
     return leaseIp ? { ...n, ip: leaseIp } : n;
   });
 
+  // Enrich navia/chiori/shenhe with real k8s node-level CPU/memory usage from metrics-server.
+  // Evaluator uses k8sNodeMetrics branch for these nodes, bypassing Proxmox allocation figures.
+  const K3S_VMS = new Set(['navia', 'chiori', 'shenhe']);
+  const enrichedProxmoxNodes = patchedProxmoxNodes.map(n => {
+    if (!K3S_VMS.has(n.id)) return n;
+    const nm = k8s.nodeMetrics?.[n.id];
+    const nc = k8s.nodeCapacity?.[n.id];
+    if (!nm && !nc) return n;
+    return {
+      ...n,
+      meta: {
+        ...n.meta,
+        k8sNodeMetrics:    true,
+        ...(nm?.cpuM    != null ? { k8sNodeCpuM:        nm.cpuM    } : {}),
+        ...(nm?.memMiB  != null ? { k8sNodeMemMiB:      nm.memMiB  } : {}),
+        ...(nc?.cpuTotalM   != null ? { k8sNodeCpuTotalM:   nc.cpuTotalM   } : {}),
+        ...(nc?.memTotalMiB != null ? { k8sNodeMemTotalMiB: nc.memTotalMiB } : {}),
+      },
+    };
+  });
+
   const allNodes = [
     ...nonPveNodes,
-    ...patchedProxmoxNodes,
+    ...enrichedProxmoxNodes,
     ...k8s.nodes,
     ...docker.nodes,
   ];

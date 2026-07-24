@@ -30,6 +30,11 @@ async function fetchInfisicalEdges(nodes) {
       byNorm[norm(n.id)] = n;
       byNorm[norm(n.name)] = n;
       if (n.meta?.lokiLabel) byNorm[norm(n.meta.lokiLabel)] = n;
+      // bjw-s app-template names deployments <release>-<controller> (e.g. appsmith-main).
+      // Infisical folders use the release name only — also index without the controller suffix.
+      if (n.type === 'k3s-service' && n.name?.endsWith('-main')) {
+        byNorm[norm(n.name.replace(/-main$/, ''))] = n;
+      }
     }
 
     // Find actual Infisical k3s node; fall back to static 'infisical' id
@@ -63,9 +68,12 @@ async function fetchInfisicalEdges(nodes) {
         if (lxcWithIp.length) {
           try {
             const secretData = await infisicalFetch(`/v1/secrets?workspaceId=${ws.id}&environment=${envSlug}&secretPath=/${folder.name}`);
-            const allValues = (secretData.secrets || []).map(s => s.secretValue || s.value || '').join(' ');
+            const secrets = secretData.secrets || [];
+            const allValues = secrets.map(s => s.secretValue || s.value || '').join(' ');
+            console.log(`[infisical] /${folder.name}: ${secrets.length} secrets, ${allValues.length} value chars`);
             for (const lxc of lxcWithIp) {
-              if (!allValues.includes(lxc.ip)) continue;
+              const terms = [lxc.ip, lxc.id, lxc.name].filter(Boolean);
+              if (!terms.some(t => allValues.includes(t))) continue;
               const dbEdgeId = `e-db-${target.id}-${lxc.id}`;
               if (!seen.has(dbEdgeId)) {
                 seen.add(dbEdgeId);
@@ -73,7 +81,7 @@ async function fetchInfisicalEdges(nodes) {
                 console.log(`[infisical] DB edge: ${target.id} → ${lxc.id} (${lxc.ip})`);
               }
             }
-          } catch { /* secrets fetch failed for this folder */ }
+          } catch (e) { console.warn(`[infisical] secrets fetch failed for /${folder.name}:`, e.message); }
         }
       }
     }
