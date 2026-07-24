@@ -4,66 +4,36 @@ const { fetchDockerNodes } = require('./sources/docker');
 const { fetchAuthentikEdges } = require('./sources/authentik');
 const { fetchInfisicalEdges } = require('./sources/infisical');
 const { buildDbPortMap, dbTypesFromEnvKeys } = require('./sources/dbprobe');
-const { fetchNonProxmoxNodes } = require('./non-proxmox-nodes');
 const { fetchHomeAssistantNode } = require('./sources/homeassistant');
 const { fetchOPNsenseNode, fetchDhcpLeaseMap } = require('./sources/opnsense');
 const { fetchLocalProcStats } = require('./sources/localproc');
 const { fetchKazuhaStats } = require('./sources/kazuha');
+const { fetchUGOSNode } = require('./sources/ugos');
 
 async function buildTopology() {
   console.log('[topology] building...');
 
-  const [proxmox, k8s, docker, nonPve, haStats, opnStats, procStats, kazuhaStats, dhcpLeases] = await Promise.all([
+  const [proxmox, k8s, docker, haResult, opnResult, procResult, kazuhaResult, ugosResult, dhcpLeases] = await Promise.all([
     fetchProxmoxNodes(),
     fetchK8sNodes(),
     fetchDockerNodes(),
-    fetchNonProxmoxNodes(),
     fetchHomeAssistantNode(),
     fetchOPNsenseNode(),
     fetchLocalProcStats(),
     fetchKazuhaStats(),
+    fetchUGOSNode(),
     fetchDhcpLeaseMap(),
   ]);
 
-  // Enrich non-Proxmox nodes with live data
-  const nonPveNodes = nonPve.nodes.map(n => {
-    // DHCP lease overrides DNS-resolved IP with current lease IP
+  // Each non-Proxmox connector returns { node, edges? } or null.
+  // Patch IPs from DHCP leases where the connector resolved via DNS.
+  const nonPveConnectors = [haResult, opnResult, procResult, kazuhaResult, ugosResult].filter(Boolean);
+  const nonPveNodes = nonPveConnectors.map(c => {
+    const n = c.node;
     const leaseIp = dhcpLeases[n.id] || dhcpLeases[n.id.toLowerCase()];
-
-    if (n.id === 'noelle' && haStats) {
-      return {
-        ...n,
-        ip: leaseIp || n.ip,
-        status: haStats.status,
-        meta: { ...n.meta, cpuPercent: haStats.cpuPercent, memMiB: haStats.memMiB, memPercent: haStats.memPercent, diskGiB: haStats.diskGiB, diskPercent: haStats.diskPercent, haMetrics: true },
-      };
-    }
-    if (n.id === 'cyno' && opnStats) {
-      return {
-        ...n,
-        ip: leaseIp || n.ip,
-        status: opnStats.status,
-        meta: { ...n.meta, ...opnStats.meta },
-      };
-    }
-    if (n.id === 'heizou' && procStats) {
-      return {
-        ...n,
-        ip: leaseIp || n.ip,
-        status: 'healthy', // if we can read /proc we are definitely up
-        meta: { ...n.meta, cpuPercent: procStats.cpuPercent, memPercent: procStats.memPercent, diskPercent: procStats.diskPercent, haMetrics: true },
-      };
-    }
-    if (n.id === 'kazuha' && kazuhaStats) {
-      return {
-        ...n,
-        ip: leaseIp || n.ip,
-        status: kazuhaStats.status,
-        meta: { ...n.meta, cpuPercent: kazuhaStats.cpuPercent, memPercent: kazuhaStats.memPercent, diskPercent: kazuhaStats.diskPercent, haMetrics: true },
-      };
-    }
-    return { ...n, ip: leaseIp || n.ip };
+    return leaseIp ? { ...n, ip: leaseIp } : n;
   });
+  const nonPveEdges = nonPveConnectors.flatMap(c => c.edges || []);
 
   // Patch null IPs on Proxmox-discovered nodes using DHCP leases (covers any remaining gaps)
   const patchedProxmoxNodes = proxmox.nodes.map(n => {
@@ -100,8 +70,9 @@ async function buildTopology() {
     ...docker.nodes,
   ];
 
+
   const baseEdges = [
-    ...nonPve.edges,
+    ...nonPveEdges,
     ...proxmox.edges,
     ...k8s.edges,
     ...docker.edges,
@@ -159,7 +130,14 @@ async function buildTopology() {
     console.log(`[topology] ${dbEdges.length} DB edges auto-detected`);
   }
 
-  const allEdges = [...baseEdges, ...authentikEdges, ...infisicalEdges, ...dbEdges];
+  // Static semantic edges — cross-cutting relationships no single connector owns.
+  // These represent known infrastructure wiring (tunnels, DNS dependencies).
+  const semanticEdges = [
+    { id: 'e-net-kirara-kazuha', source: 'kirara', target: 'kazuha', type: 'network' },
+    { id: 'e-net-lyney-navia',   source: 'lyney',  target: 'navia',  type: 'network' },
+  ].filter(e => allNodes.some(n => n.id === e.source) && allNodes.some(n => n.id === e.target));
+
+  const allEdges = [...baseEdges, ...authentikEdges, ...infisicalEdges, ...dbEdges, ...semanticEdges];
 
   console.log(`[topology] done — ${allNodes.length} nodes, ${allEdges.length} edges`);
 

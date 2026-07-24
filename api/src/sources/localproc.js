@@ -1,5 +1,9 @@
 const fs = require('fs');
 const os = require('os');
+const dns = require('dns/promises');
+
+const LOCAL_NODE_ID   = process.env.LOCAL_NODE_ID   || 'heizou';
+const LOCAL_NODE_NAME = process.env.LOCAL_NODE_NAME || 'Heizou';
 
 // Read CPU usage from /proc/stat — takes two snapshots 500ms apart for accurate rate
 async function readCpuPercent() {
@@ -48,19 +52,40 @@ function readDiskPercent(mountpoint = '/') {
   }
 }
 
+async function resolveIp(hostname) {
+  try { return (await dns.lookup(hostname)).address; } catch { return null; }
+}
+
 async function fetchLocalProcStats() {
   if (process.platform !== 'linux') return null;
+
+  const ip = await resolveIp(LOCAL_NODE_ID);
+
   try {
     const [cpuPercent, memPercent, diskPercent] = await Promise.all([
       readCpuPercent(),
       Promise.resolve(readMemPercent()),
       Promise.resolve(readDiskPercent('/')),
     ]);
-    console.log(`[localproc] heizou cpu=${cpuPercent.toFixed(1)}% mem=${memPercent.toFixed(1)}% disk=${diskPercent.toFixed(1)}%`);
-    return {
-      cpuPercent: Math.round(cpuPercent * 10) / 10,
-      memPercent: Math.round(memPercent * 10) / 10,
+    const stats = {
+      cpuPercent:  Math.round(cpuPercent  * 10) / 10,
+      memPercent:  Math.round(memPercent  * 10) / 10,
       diskPercent: Math.round(diskPercent * 10) / 10,
+    };
+    console.log(`[localproc] ${LOCAL_NODE_ID} cpu=${stats.cpuPercent}% mem=${stats.memPercent}% disk=${stats.diskPercent}%`);
+    return {
+      node: {
+        id: LOCAL_NODE_ID,
+        name: LOCAL_NODE_NAME,
+        type: 'baremetal',
+        layer: 'host',
+        isEdge: false,
+        parentId: null,
+        column: LOCAL_NODE_ID,
+        ip,
+        status: 'healthy',
+        meta: { lokiLabel: LOCAL_NODE_ID, haMetrics: true, ...stats },
+      },
     };
   } catch (err) {
     console.warn('[localproc] failed:', err.message);

@@ -1,9 +1,12 @@
 const fetch = require('node-fetch');
 const https = require('https');
+const dns = require('dns/promises');
 
-const OPN_URL = process.env.OPNSENSE_URL || 'https://cyno';
-const OPN_KEY = process.env.OPNSENSE_KEY;
-const OPN_SECRET = process.env.OPNSENSE_SECRET;
+const OPN_URL       = process.env.OPNSENSE_URL  || 'https://cyno';
+const OPN_KEY       = process.env.OPNSENSE_KEY;
+const OPN_SECRET    = process.env.OPNSENSE_SECRET;
+const OPN_NODE_ID   = process.env.OPN_NODE_ID   || 'cyno';
+const OPN_NODE_NAME = process.env.OPN_NODE_NAME || 'Cyno';
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
@@ -44,8 +47,30 @@ async function fetchDhcpLeaseMap() {
   }
 }
 
-async function fetchOPNsenseNode(leaseMap) {
+async function resolveIp(hostname) {
+  try { return (await dns.lookup(hostname)).address; } catch { return null; }
+}
+
+function baseNode(ip, status, meta) {
+  return {
+    id: OPN_NODE_ID,
+    name: OPN_NODE_NAME,
+    type: 'firewall',
+    layer: 'edge',
+    isEdge: true,
+    parentId: null,
+    column: OPN_NODE_ID,
+    ip,
+    status,
+    meta,
+  };
+}
+
+async function fetchOPNsenseNode() {
   if (!OPN_KEY || !OPN_SECRET) { console.warn('[opnsense] no credentials'); return null; }
+
+  const hostname = new URL(OPN_URL).hostname;
+  const ip = await resolveIp(hostname);
 
   try {
     const [firmware, interfaces] = await Promise.all([
@@ -54,30 +79,12 @@ async function fetchOPNsenseNode(leaseMap) {
     ]);
 
     const version = firmware?.product_version || null;
+    console.log(`[opnsense] ${OPN_NODE_ID} up, version=${version}`);
 
-    // Find WAN rx/tx bytes for network throughput indicator
-    let networkMbps = null;
-    if (interfaces?.statistics) {
-      const stats = Object.values(interfaces.statistics);
-      const wan = stats.find(s => s.flags?.includes('up') && !s.flags?.includes('loopback') && s['bytes in'] > 0);
-      if (wan) {
-        // bytes in/out are totals — snapshot only, no rate calculation possible in single poll
-        networkMbps = 0;
-      }
-    }
-
-    console.log(`[opnsense] cyno up, version=${version}`);
-
-    return {
-      status: 'healthy',
-      meta: {
-        version,
-        ...(networkMbps !== null ? { networkMbps } : {}),
-      },
-    };
+    return { node: baseNode(ip, 'healthy', { lokiLabel: OPN_NODE_ID, version }) };
   } catch (err) {
     console.warn('[opnsense] status fetch failed:', err.message);
-    return { status: 'critical', meta: {} };
+    return { node: baseNode(ip, 'critical', { lokiLabel: OPN_NODE_ID }) };
   }
 }
 

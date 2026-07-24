@@ -67,7 +67,7 @@ async function fetchInfisicalEdges(nodes) {
         // Scan secret values for LXC IPs → draw database edge
         if (lxcWithIp.length) {
           try {
-            const secretData = await infisicalFetch(`/v1/secrets?workspaceId=${ws.id}&environment=${envSlug}&secretPath=/${folder.name}`);
+            const secretData = await infisicalFetch(`/v3/secrets/raw?workspaceId=${ws.id}&environment=${envSlug}&secretPath=/${folder.name}`);
             const secrets = secretData.secrets || [];
             const allValues = secrets.map(s => s.secretValue || s.value || '').join(' ');
             console.log(`[infisical] /${folder.name}: ${secrets.length} secrets, ${allValues.length} value chars`);

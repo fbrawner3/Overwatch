@@ -150,9 +150,11 @@ export default function LeftHUD() {
           <span style={S.label}>Storage</span>
           <span style={{ fontSize: '11px', color: '#67e8f9', fontFamily: 'monospace', fontWeight: 600 }}>
             {(() => {
-              const z = metrics['zhongli'];
-              if (!z || !z.diskPercent) return '? / 12 TB';
-              return `${(z.diskPercent / 100 * 12).toFixed(1)} / 12 TB`;
+              const zNode = nodes.find(n => n.id === 'zhongli');
+              const used  = zNode?.meta?.diskUsedTiB;
+              const total = zNode?.meta?.diskTotalTiB;
+              if (used == null || total == null) return '? TB';
+              return `${used.toFixed(1)} / ${total.toFixed(1)} TiB`;
             })()}
           </span>
         </div>

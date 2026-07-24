@@ -1,7 +1,10 @@
 const fetch = require('node-fetch');
+const dns = require('dns/promises');
 
-const HA_URL = process.env.HA_URL || 'http://noelle:8123';
-const HA_TOKEN = process.env.HA_TOKEN;
+const HA_URL      = process.env.HA_URL       || 'http://noelle:8123';
+const HA_TOKEN    = process.env.HA_TOKEN;
+const HA_NODE_ID  = process.env.HA_NODE_ID   || 'noelle';
+const HA_NODE_NAME = process.env.HA_NODE_NAME || 'Noelle';
 
 async function haGet(path) {
   const res = await fetch(`${HA_URL}${path}`, {
@@ -17,11 +20,32 @@ function entityValue(state) {
   return Number.isFinite(v) ? v : null;
 }
 
+async function resolveIp(hostname) {
+  try { return (await dns.lookup(hostname)).address; } catch { return null; }
+}
+
+function baseNode(ip, status, meta) {
+  return {
+    id: HA_NODE_ID,
+    name: HA_NODE_NAME,
+    type: 'baremetal',
+    layer: 'host',
+    isEdge: false,
+    parentId: null,
+    column: HA_NODE_ID,
+    ip,
+    status,
+    meta: { lokiLabel: HA_NODE_ID, haMetrics: true, ...meta },
+  };
+}
+
 async function fetchHomeAssistantNode() {
   if (!HA_TOKEN) { console.warn('[ha] no HA_TOKEN'); return null; }
 
+  const hostname = new URL(HA_URL).hostname;
+  const ip = await resolveIp(hostname);
+
   try {
-    // Fetch system monitor entities in parallel — percent variants may not exist on all HA setups
     const [cpu, memUse, memUsePct, diskUse, diskUsePct] = await Promise.all([
       haGet('/api/states/sensor.system_monitor_processor_use').catch(() => null),
       haGet('/api/states/sensor.system_monitor_memory_use').catch(() => null),
@@ -36,19 +60,12 @@ async function fetchHomeAssistantNode() {
     const diskUseGiB  = entityValue(diskUse);
     const diskPercent = entityValue(diskUsePct);
 
-    console.log(`[ha] noelle cpu=${cpuPercent}% mem=${memUseMiB}MiB(${memPercent}%) disk=${diskUseGiB}GiB(${diskPercent}%)`);
+    console.log(`[ha] ${HA_NODE_ID} cpu=${cpuPercent}% mem=${memUseMiB}MiB(${memPercent}%) disk=${diskUseGiB}GiB(${diskPercent}%)`);
 
-    return {
-      cpuPercent,
-      memMiB: memUseMiB,
-      memPercent,
-      diskGiB: diskUseGiB,
-      diskPercent,
-      status: 'healthy',
-    };
+    return { node: baseNode(ip, 'healthy', { cpuPercent, memMiB: memUseMiB, memPercent, diskGiB: diskUseGiB, diskPercent }) };
   } catch (err) {
     console.warn('[ha] failed:', err.message);
-    return { status: 'critical', cpuPercent: null, memPercent: null, diskPercent: null };
+    return { node: baseNode(ip, 'critical', {}) };
   }
 }
 
