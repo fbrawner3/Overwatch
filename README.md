@@ -1,5 +1,7 @@
 # Hexmap
 
+![Hexmap](docs/images/hexmap.jpg)
+
 Status: active
 Created: 2026-06-30
 Owner: Felton
