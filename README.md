@@ -9,21 +9,49 @@ Builder: Codex (implementation), Claude (architecture/spec)
 
 ## Purpose
 
-Originally a 3D layered network topology visualizer for homelab infrastructure, that rendered hosts, VMs, k3s pods, and storage/NFS resources as a rotating multi-layer hex grid, with live metrics pulled from Prometheus and logs from Loki. Built as a replacement for a flat dashboard — each infrastructure layer (hosts, VMs, containers, storage) gets its own hex plane, with connections drawn between related nodes across layers.  I had to flatten it due to the unrealistic design and implecations of not being able to see all the nodes, as the environement grew.
+An API-driven, agentless network topology visualizer for homelab infrastructure. A Node backend polls existing infrastructure APIs directly — Proxmox, Kubernetes, Docker, Home Assistant, OPNsense, UGOS/NAS, Infisical, Authentik — to discover hosts, VMs, k3s pods, and storage, with live metrics from Prometheus and logs from Loki. Nothing is installed on the monitored hosts themselves; every data point comes from an API the infrastructure already exposes.
+
+Originally a rotating 3D hex grid. Flattened to 2D — at 3D, and as the environment grew, nodes became too hard to make out and the layout stopped being usable for what this is actually for: a quick look at what's up or down.
+
+## How it renders
+
+Custom SVG rendering — no D3, no Cytoscape, no charting library. Each node type maps to a distinct shape so infrastructure tier reads before the label does:
+
+| Type | Shape | Type | Shape |
+|---|---|---|---|
+| `proxmox-host` | hexagon | `firewall` | diamond |
+| `vm` | octagon | `nas` / `baremetal` | diamond |
+| `lxc` | circle | `vps` | circle |
+| `k3s-service` | triangle | `app` | rounded rect |
+
+CPU/mem/disk/network radiate as small gauge spokes off each node, colored by severity.
+
+## Edge detection
+
+Edges aren't hand-declared — most are inferred from live data:
+
+- **hosts / pod_host** — physical hosting and k8s pod-to-node scheduling
+- **database** — TCP port probe (5432/3306/27017/…) cross-checked against pod env-var key names, no values read
+- **sso** — pulled from Authentik's provider list
+- **secrets_for** — Infisical folder name matched against node IDs
+- **storage / network** — NFS mount and tunnel/DNS dependencies
 
 ## Structure
 
 ```
-frontend/   React + Vite app — 3D hex grid rendering, node detail panels, OIDC login
-api/        Express + SQLite backend — discovers topology from infra sources, evaluates node state, caches results
+frontend/   React + Vite app — 2D SVG rendering, node detail panels, OIDC login
+api/        Express backend — agentless discovery from infra APIs, threshold evaluation (SQLite-backed), caching
 ```
+
+Each backend connector (`proxmox.js`, `k8s.js`, `docker.js`, `ugos.js`, `opnsense.js`, …) owns both its node definitions and their live metrics; the topology engine just calls every connector and merges the results.
 
 ## Stack
 
-- **Frontend:** React, Vite, Radix UI, Tailwind
+- **Frontend:** React, Vite, Tailwind, Zustand, react-oidc-context
 - **Backend:** Node.js, Express, better-sqlite3
 - **Auth:** OIDC (Authentik)
 - **Metrics/Logs:** Prometheus, Loki
+- **Discovery sources:** Proxmox, Kubernetes, Docker, Home Assistant, OPNsense, UGOS, Infisical, Authentik — polled directly, no agents
 
 ## Notes
 
