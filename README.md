@@ -24,7 +24,7 @@ Custom SVG rendering — no D3, no Cytoscape, no charting library. Each node typ
 | `lxc` | circle | `vps` | circle |
 | `k3s-service` | triangle | `app` | rounded rect |
 
-CPU/mem/disk/network radiate as small gauge spokes off each node, colored by severity.
+CPU/mem/disk/network show up in a right pane when you select a node.
 
 ## Edge detection
 
