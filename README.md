@@ -9,7 +9,7 @@ Builder: Codex (implementation), Claude (architecture/spec)
 
 ## Purpose
 
-A 3D layered network topology visualizer for homelab infrastructure. Renders hosts, VMs, k3s pods, and storage/NFS resources as a rotating multi-layer hex grid, with live metrics pulled from Prometheus and logs from Loki. Built as a replacement for a flat dashboard — each infrastructure layer (hosts, VMs, containers, storage) gets its own hex plane, with connections drawn between related nodes across layers.
+Originally a 3D layered network topology visualizer for homelab infrastructure. Renders hosts, VMs, k3s pods, and storage/NFS resources as a rotating multi-layer hex grid, with live metrics pulled from Prometheus and logs from Loki. Built as a replacement for a flat dashboard — each infrastructure layer (hosts, VMs, containers, storage) gets its own hex plane, with connections drawn between related nodes across layers.
 
 ## Structure
 
