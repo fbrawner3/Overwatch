@@ -269,7 +269,7 @@ HUMAN REVIEW
 
 The same incident remains identifiable throughout its lifetime.
 
-![Overwatch](docs/images/ticket-showing-idempoency-and-update.jpg)
+![Overwatch](docs/images/ticket-showing-idempotency-and-update.jpg)
 
 ------------------------------------------------------------------------
 
@@ -324,7 +324,7 @@ additional tickets.
 This preserves the history of the condition while keeping the incident
 queue clean.
 
-![Overwatch](docs/images/proof-idempotency-works.jpg)
+![Overwatch](docs/images/proof-idempotency_works.jpg)
 
 ------------------------------------------------------------------------
 
