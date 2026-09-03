@@ -1,5 +1,5 @@
 # Overwatch
-[!Overwatch](docs/images/Overwatch-Logo.png)
+![Overwatch](docs/images/Overwatch-Logo.png)
 
 Overwatch is an agentless infrastructure topology, observability, and incident automation platform built for heterogeneous environments spanning Kubernetes, Proxmox, Docker, networking, storage, identity, and supporting services.
 
