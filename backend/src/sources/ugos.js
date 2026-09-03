@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const crypto = require('crypto');
 const dns = require('dns/promises');
 
-const UGOS_URL       = process.env.UGOS_URL       || 'http://10.0.0.10:9999';
+const UGOS_URL       = process.env.UGOS_URL       || 'http://192.168.7.10:9999';
 const UGOS_USERNAME  = process.env.UGOS_USERNAME;
 const UGOS_PASSWORD  = process.env.UGOS_PASSWORD;
 const UGOS_NODE_ID   = process.env.UGOS_NODE_ID   || 'zhongli';

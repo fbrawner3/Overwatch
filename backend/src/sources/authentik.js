@@ -55,7 +55,9 @@ async function fetchAuthentikEdges(nodes) {
       const edgeId = `e-sso-${target.id}`;
       if (!seen.has(edgeId)) {
         seen.add(edgeId);
-        edges.push({ id: edgeId, source: sourceId, target: target.id, type: 'sso' });
+        // Convention: sso edge is app -> Authentik (the app is the consumer).
+        // DEP_EDGE_DIRECTION.sso = 'out' => source is the consumer.
+        edges.push({ id: edgeId, source: target.id, target: sourceId, type: 'sso' });
       }
     }
 

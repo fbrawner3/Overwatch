@@ -1,7 +1,7 @@
 const fetch = require('node-fetch');
 const https = require('https');
 
-const K8S_URL = process.env.K8S_API_URL || 'https://10.0.0.53:6443';
+const K8S_URL = process.env.K8S_API_URL || 'https://192.168.7.53:6443';
 const K8S_TOKEN = process.env.VITE_K8S_TOKEN;
 
 const agent = new https.Agent({ rejectUnauthorized: false });
@@ -20,9 +20,24 @@ function slugify(str) {
   return String(str).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-function cleanAppName(name, ownerKind) {
-  if (ownerKind === 'ReplicaSet') return name.replace(/-[a-z0-9]{7,12}$/, '');
-  return name;
+// Stable pod-name prefix for Loki's `pod` label. A Deployment pod's owner is a
+// ReplicaSet named "<deployment>-<pod-template-hash>"; k8s stamps that hash on
+// the pod as a label, so strip it exactly rather than guessing with a regex.
+// StatefulSet / DaemonSet owner names are already the stable prefix.
+function podPrefix(ownerName, pod) {
+  const n = String(ownerName || '');
+  const hash = pod?.metadata?.labels?.['pod-template-hash'];
+  if (hash && n.endsWith('-' + hash)) return n.slice(0, -(hash.length + 1));
+  return n;
+}
+
+// Display name — podPrefix plus de-duplication of repeated segments
+// (infisical-infisical-standalone-infisical -> infisical-standalone).
+function cleanAppName(ownerName, pod) {
+  const n = podPrefix(ownerName, pod);
+  const seen = new Set(), out = [];
+  for (const p of n.split('-')) { if (p && !seen.has(p)) { seen.add(p); out.push(p); } }
+  return out.join('-') || n;
 }
 
 function parseCpuM(str) {
@@ -66,16 +81,19 @@ async function fetchK8sNodes() {
       const ownerRef = pod.metadata?.ownerReferences?.[0];
       const ownerKind = ownerRef?.kind;
       if (ownerKind === 'Job') continue;
+      if (pod.status?.phase === 'Succeeded') continue;
 
       const podName = pod.metadata?.name;
       const nodeName = pod.spec?.nodeName;
-      const appName = cleanAppName(ownerRef?.name || podName, ownerKind);
+      const rawName = ownerRef?.name || podName;
+      const appName = cleanAppName(rawName, pod);                 // display
+      const lokiPrefix = podPrefix(rawName, pod);                 // Loki `pod` label prefix
       const key = `${ns}/${appName}`;
 
       const running = pod.status?.containerStatuses?.some(c => c.state?.running);
 
       if (!seen.has(key)) {
-        seen.set(key, { ns, nodeName, appName, ownerKind, podDown: !running, pod });
+        seen.set(key, { ns, nodeName, appName, lokiPrefix, ownerKind, podDown: !running, pod });
       } else if (running) {
         seen.get(key).podDown = false;
       }
@@ -88,7 +106,7 @@ async function fetchK8sNodes() {
       if (!USER_NAMESPACES.includes(ns)) continue;
       const ownerRef = pod.metadata?.ownerReferences?.[0];
       const podName = pod.metadata?.name;
-      const appName = cleanAppName(ownerRef?.name || podName, ownerRef?.kind);
+      const appName = cleanAppName(ownerRef?.name || podName, pod);
       podToApp[`${ns}/${podName}`] = `${ns}/${appName}`;
     }
 
@@ -142,7 +160,7 @@ async function fetchK8sNodes() {
       console.warn('[k8s] node-level metrics failed:', e.message);
     }
 
-    const nodes = [...seen.values()].map(({ ns, nodeName, appName, ownerKind, podDown, pod }) => {
+    const nodes = [...seen.values()].map(({ ns, nodeName, appName, lokiPrefix, ownerKind, podDown, pod }) => {
       const placement = K3S_NODE_PLACEMENT[nodeName] || K3S_NODE_PLACEMENT.navia;
       const metrics = appMetrics[`${ns}/${appName}`];
 
@@ -168,7 +186,7 @@ async function fetchK8sNodes() {
         meta: {
           namespace: ns,
           createdByKind: ownerKind,
-          lokiLabel: appName,
+          lokiLabel: lokiPrefix || appName,
           podDown,
           ...(metrics ? {
             k8sMetrics: true,
@@ -184,7 +202,7 @@ async function fetchK8sNodes() {
     // Detect NFS volumes pointing to zhongli — inline volumes + PV fallback
     const nfsEdges = [];
     try {
-      const ZHONGLI = ['10.0.0.10', 'zhongli'];
+      const ZHONGLI = ['192.168.7.10', 'zhongli'];
       let nfsPvcNames = new Set();
       try {
         const pvsData = await k8s('/api/v1/persistentvolumes');
@@ -209,7 +227,7 @@ async function fetchK8sNodes() {
         if (!usesNfs) continue;
 
         const ownerRef = pod.metadata?.ownerReferences?.[0];
-        const appName = cleanAppName(ownerRef?.name || pod.metadata?.name, ownerRef?.kind);
+        const appName = cleanAppName(ownerRef?.name || pod.metadata?.name, pod);
         // Always use k3s ID format — static normIdx would give 'nextcloud' but frontend has 'k3s-homelab-nextcloud'
         const targetId = `k3s-${slugify(ns)}-${slugify(appName)}`;
         if (seenEdges.has(targetId)) continue;

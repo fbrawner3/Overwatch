@@ -9,9 +9,9 @@
     "test": "node --test test/evaluate.test.js"
   },
   "dependencies": {
-    "better-sqlite3": "^9.6.0",
-    "express": "^4.19.2",
-    "node-fetch": "^2.7.0",
-    "https": "*"
+    "better-sqlite3": "9.6.0",
+    "express": "4.19.2",
+    "net-snmp": "3.11.2",
+    "node-fetch": "2.7.0"
   }
 }

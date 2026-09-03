@@ -3,7 +3,7 @@ const http = require('http');
 const net = require('net');
 
 const HEIZOU_SOCKET = '/var/run/docker.sock';
-const ZHONGLI_URL = process.env.DOCKER_ZHONGLI_URL || 'http://10.0.0.10:2375';
+const ZHONGLI_URL = process.env.DOCKER_ZHONGLI_URL || 'http://192.168.7.10:2375';
 
 function slugify(str) {
   return String(str).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -68,7 +68,7 @@ async function detectNfsEdges(containers, fetchFn, host) {
   try {
     const volumeData = await fetchFn('/volumes');
     const volumes = volumeData.Volumes || [];
-    const ZHONGLI = ['10.0.0.10', 'zhongli'];
+    const ZHONGLI = ['192.168.7.10', 'zhongli'];
 
     const nfsVolumeNames = new Set(
       volumes
@@ -155,7 +155,7 @@ async function fetchDockerNodes() {
     heizouContainers = await fetchSocket('/containers/json?all=false');
     const heizouMetrics = await fetchContainerMetrics(heizouContainers, fetchSocket).catch(() => ({}));
     for (const c of heizouContainers) {
-      const node = containerToNode(c, 'heizou', '10.0.0.20', 'heizou', 'heizou');
+      const node = containerToNode(c, 'heizou', '192.168.7.20', 'heizou', 'heizou');
       if (node) {
         const m = heizouMetrics[node.name];
         if (m) {
@@ -184,7 +184,7 @@ async function fetchDockerNodes() {
       path => fetchTCP(ZHONGLI_URL, path)
     ).catch(() => ({}));
     for (const c of containers) {
-      const node = containerToNode(c, 'zhongli', '10.0.0.10', 'zhongli', 'zhongli');
+      const node = containerToNode(c, 'zhongli', '192.168.7.10', 'zhongli', 'zhongli');
       if (node) {
         const m = zhongliMetrics[node.name];
         if (m) {

@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const https = require('https');
 const dns = require('dns/promises');
 
-const PVE_URL = process.env.PVE_URL || 'https://10.0.0.200:8006';
+const PVE_URL = process.env.PVE_URL || 'https://192.168.7.200:8006';
 const PVE_TOKEN = process.env.PVE_TOKEN;
 
 const agent = new https.Agent({ rejectUnauthorized: false });
@@ -43,7 +43,7 @@ async function fetchProxmoxNodes() {
     const pveNodes = await pve('/nodes');
     const nodes = [];
     const edges = [];
-    const ZHONGLI = ['10.0.0.10', 'zhongli'];
+    const ZHONGLI = ['192.168.7.10', 'zhongli'];
 
     for (const pveNode of pveNodes) {
       const nodeName = pveNode.node;
