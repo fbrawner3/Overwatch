@@ -324,7 +324,7 @@ additional tickets.
 This preserves the history of the condition while keeping the incident
 queue clean.
 
-![Overwatch](docs/images/proof-idempotency_works.jpg)
+![Overwatch](docs/images/proof-idemoptency_works.jpg)
 
 ------------------------------------------------------------------------
 
